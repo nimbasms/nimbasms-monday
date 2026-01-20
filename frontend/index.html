@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nimba SMS pour monday</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/monday-sdk-js/dist/main.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Nimba SMS</h1>
+      <p class="hint">
+        Utilisez cette vue pour envoyer un SMS manuellement ou via les colonnes
+        du board.
+      </p>
+
+      <label>
+        Téléphone
+        <input id="phoneInput" type="tel" placeholder="+224..." />
+      </label>
+
+      <label>
+        Message
+        <textarea id="messageInput" rows="4"></textarea>
+      </label>
+
+      <label>
+        Sender ID
+        <select id="senderSelect">
+          <option value="">Sélectionner un sender</option>
+        </select>
+      </label>
+
+      <button id="sendButton">Envoyer le SMS</button>
+      <p id="status" class="status"></p>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

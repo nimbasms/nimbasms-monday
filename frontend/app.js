@@ -56,9 +56,13 @@ const buildPayload = async () => {
   const item = await fetchItemData();
   const columns = item.column_values || [];
 
-  const phone =
+  const rawPhone =
     phoneInput.value.trim() ||
     resolveColumnValue(columns, settings.phoneColumnId);
+  const phone = rawPhone
+    .split(/\n+/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
   const message =
     messageInput.value.trim() ||
     resolveColumnValue(columns, settings.messageColumnId);

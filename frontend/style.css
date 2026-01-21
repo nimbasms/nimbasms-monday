@@ -69,3 +69,11 @@ button:hover {
 .status[data-type="error"] {
   color: #e3342f;
 }
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #6b6f76;
+}

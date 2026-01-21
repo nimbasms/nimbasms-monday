@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class SmsRequest(BaseModel):
-    phone_number: str
+    phone_number: list[str]
     message: str
     sender_id: str | None = None
     nimba_sid: str | None = None

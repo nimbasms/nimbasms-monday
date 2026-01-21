@@ -3,17 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nimba SMS pour monday</title>
+    <title>Nimba SMS - Envoi multiple</title>
     <link rel="stylesheet" href="./style.css" />
     <script src="https://cdn.jsdelivr.net/npm/monday-sdk-js/dist/main.js"></script>
   </head>
   <body>
     <div class="container">
-      <h1>Nimba SMS</h1>
+      <h1>Nimba SMS - Envoi multiple</h1>
       <p class="hint">
-        Utilisez cette vue pour envoyer un SMS manuellement ou via les colonnes
-        du board.
+        Envoyez un SMS aux items sélectionnés. Les numéros sont récupérés depuis
+        la colonne configurée.
       </p>
+
+      <div class="meta">
+        <span id="selectedCount">Items sélectionnés: 0</span>
+        <span id="numbersCount">Numéros détectés: 0</span>
+      </div>
 
       <label>
         Message
@@ -29,11 +34,7 @@
 
       <label>
         Numéros (un par ligne)
-        <textarea
-          id="phoneInput"
-          rows="4"
-          placeholder="+2246..."
-        ></textarea>
+        <textarea id="phoneInput" rows="5" placeholder="+2246..."></textarea>
         <span class="hint">Un numéro par ligne.</span>
       </label>
 
@@ -41,6 +42,6 @@
       <p id="status" class="status"></p>
     </div>
 
-    <script src="./app.js"></script>
+    <script src="./bulk.js"></script>
   </body>
 </html>

@@ -66,8 +66,14 @@ def _extract_payload(body: dict[str, Any]) -> dict[str, Any]:
     update_body = payload.get("update_body")
     dry_run = bool(payload.get("dry_run", False))
 
+    phone_list: list[str] = []
+    if isinstance(phone_number, list):
+        phone_list = [str(value).strip() for value in phone_number if str(value).strip()]
+    elif isinstance(phone_number, str):
+        phone_list = [value.strip() for value in phone_number.split(",") if value.strip()]
+
     return {
-        "phone_number": phone_number,
+        "phone_number": phone_list,
         "message": message,
         "sender_id": sender_id,
         "nimba_sid": nimba_sid,
@@ -150,7 +156,7 @@ async def _handle_request(request: Request, signature: str | None) -> SmsRespons
 
     try:
         nimba_response = client.send_sms(
-            phone_number=sms_request.phone_number,
+            phone_numbers=sms_request.phone_number,
             message=sms_request.message,
             sender_id=sms_request.sender_id,
         )

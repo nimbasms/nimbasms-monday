@@ -26,14 +26,14 @@ class NimbaClient:
 
     def send_sms(
         self,
-        phone_number: str,
+        phone_numbers: list[str],
         message: str,
         sender_id: str | None = None,
         callback_url: str | None = None,
     ) -> dict[str, Any]:
         url = f"{self.base_url}{self.send_path}"
         payload: dict[str, Any] = {
-            "to": [phone_number],
+            "to": phone_numbers,
             "message": message,
         }
         if sender_id:

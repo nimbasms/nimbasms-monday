@@ -1,0 +1,13 @@
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.lzma
+*.tar.lz
+*.tar.z
+*.tar.gz.sha256
+*.tar.gz.sha512
+*.tar.gz.sha3_256
+*.tar.gz.sha3_512
+*.tar.gz.sha3_384
+*.tar.gz.sha3_224

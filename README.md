@@ -169,21 +169,6 @@ n'existe que dans le conteneur deploye.
 
 ## Avant soumission au marketplace
 
-### Bloquant
-
-- [ ] **Relire et s'approprier le code.** monday refuse les apps « construites
-      principalement avec du no-code ou du code genere par IA ». Ce depot a ete
-      ecrit avec un assistant : la revue attend un auteur capable de defendre
-      chaque choix d'architecture.
-- [ ] **Arbitrer le stockage des identifiants Nimba.** L'app les collecte via
-      une vue d'administration. monday recommande la *Credentials field* pour
-      les workflows, et sa politique securite indique que l'app « ne doit pas
-      collecter d'identifiants utilisateur ». Point a confirmer avec l'equipe de
-      revue avant de figer l'architecture.
-- [ ] **Verifier la non-redondance.** monday n'approuve plus les integrations
-      dont l'objet principal duplique une integration existante. Nimba SMS est
-      un fournisseur distinct, mais l'argumentaire doit etre explicite.
-
 ### Technique
 
 - [ ] Secret du sessionToken confirme, code reduit a ce seul secret

@@ -135,6 +135,7 @@ async def send_sms(
                 "recipients": recipients,
                 "sender_name": sender_name,
                 "status": "sent",
+                "dlr_column_id": _first(fields, "dlrColumnId", "statusColumnId"),
             },
         )
 

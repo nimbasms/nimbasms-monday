@@ -280,3 +280,85 @@ def test_manual_send_rejects_view_only_user(client):
         headers={"Authorization": token},
     )
     assert response.status_code == 403
+
+
+# --- rapports de livraison et cycle de vie --------------------------------
+
+
+def test_dlr_ignores_payload_without_identifiers(client):
+    response = client.post("/nimba/dlr", json={"status": "DELIVRD"})
+    assert response.json()["status"] == "ignored"
+
+
+def test_dlr_records_status_without_oauth_token(client):
+    storage._get_backend().put(
+        f"nimba_message:{ACCOUNT_ID}:msg-1",
+        {"board_id": "1", "item_id": "2", "dlr_column_id": "status", "status": "sent"},
+    )
+    response = client.post(
+        "/nimba/dlr",
+        json={"messageid": "msg-1", "account_id": ACCOUNT_ID, "status": "DELIVRD"},
+    )
+    body = response.json()
+    assert body["status"] == "recorded"
+    assert body["board_updated"] == "no"  # pas de token OAuth pour ce compte
+
+    stored = storage._get_backend().get(f"nimba_message:{ACCOUNT_ID}:msg-1")
+    assert stored["status"] == "delivered"
+
+
+def test_dlr_writes_back_to_board_when_authorized(client, monkeypatch):
+    storage._get_backend().put(
+        f"monday_access_token:{ACCOUNT_ID}", {"access_token": "oauth-token"}
+    )
+    storage._get_backend().put(
+        f"nimba_message:{ACCOUNT_ID}:msg-2",
+        {"board_id": "10", "item_id": "20", "dlr_column_id": "statut", "status": "sent"},
+    )
+    captured = {}
+
+    async def fake_set_status(self, board_id, item_id, column_id, label):
+        captured.update(board_id=board_id, item_id=item_id, column_id=column_id, label=label)
+
+    monkeypatch.setattr("app.services.monday_api.MondayClient.set_status", fake_set_status)
+
+    response = client.post(
+        "/nimba/dlr",
+        json={"messageid": "msg-2", "account_id": ACCOUNT_ID, "status": "UNDELIV"},
+    )
+    assert response.json()["board_updated"] == "yes"
+    assert captured["label"] == "Echec"
+    assert captured["column_id"] == "statut"
+
+
+def test_lifecycle_purges_account_on_uninstall(client):
+    storage._get_backend().put(
+        f"nimba_credentials:{ACCOUNT_ID}", {"sid": "s", "secret": "x", "default_sender": ""}
+    )
+    storage._get_backend().put(f"monday_access_token:{ACCOUNT_ID}", {"access_token": "t"})
+
+    token = jwt.encode({"exp": 9999999999}, CLIENT_SECRET, algorithm="HS256")
+    response = client.post(
+        "/monday/lifecycle",
+        json={"type": "uninstall", "data": {"account_id": ACCOUNT_ID}},
+        headers={"Authorization": token},
+    )
+    assert response.json()["status"] == "purged"
+    assert storage._get_backend().get(f"nimba_credentials:{ACCOUNT_ID}") is None
+    assert storage._get_backend().get(f"monday_access_token:{ACCOUNT_ID}") is None
+
+
+def test_lifecycle_rejects_signing_secret(client):
+    forged = jwt.encode({"exp": 9999999999}, SIGNING_SECRET, algorithm="HS256")
+    response = client.post(
+        "/monday/lifecycle",
+        json={"type": "uninstall", "data": {"account_id": ACCOUNT_ID}},
+        headers={"Authorization": forged},
+    )
+    assert response.status_code == 401
+
+
+def test_security_headers_present(client):
+    response = client.get("/health")
+    assert response.headers["Strict-Transport-Security"].startswith("max-age=31536000")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"

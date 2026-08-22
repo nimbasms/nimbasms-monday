@@ -1,23 +1,37 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app import storage
 from app.security import SessionContext, require_account, verify_session_token
+from app.services.monday_api import MondayApiError, MondayClient
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["messages"])
+
+DELIVERED = {"delivered", "delivrd", "success", "sent_ok"}
+FAILED = {"failed", "undeliv", "undelivered", "rejected", "expired"}
+
+
+def _classify(status: str) -> str:
+    normalized = str(status or "").strip().lower()
+    if normalized in DELIVERED:
+        return "delivered"
+    if normalized in FAILED:
+        return "failed"
+    return "pending"
 
 
 @router.post("/nimba/dlr")
 async def delivery_report(request: Request) -> dict[str, str]:
-    """Accuse de reception des rapports de livraison Nimba SMS.
+    """Rapport de livraison Nimba SMS.
 
-    Le statut est conserve pour etre relu par la vue. L'ecriture differee sur
-    le board n'est pas faite ici : a ce stade le shortLivedToken de la requete
-    d'origine a expire, il faudrait un access token OAuth obtenu a l'install.
-    Voir la section « Limites connues » du README.
+    Le statut est persiste, puis reporte sur l'element du board quand le compte
+    a autorise l'app en OAuth. Le shortLivedToken de l'envoi d'origine a expire
+    depuis longtemps : seul un access token de compte permet cette ecriture.
     """
     try:
         payload: Any = await request.json()
@@ -29,15 +43,39 @@ async def delivery_report(request: Request) -> dict[str, str]:
 
     message_id = payload.get("messageid") or payload.get("message_id") or payload.get("id")
     account_id = payload.get("account_id")
-    status = payload.get("status") or payload.get("state")
+    raw_status = payload.get("status") or payload.get("state")
 
     if not message_id or not account_id:
         return {"status": "ignored"}
 
-    existing = await storage.get_message(int(account_id), str(message_id)) or {}
-    existing.update({"status": status or "unknown", "dlr": payload})
-    await storage.record_message(int(account_id), str(message_id), existing)
-    return {"status": "recorded"}
+    account_id = int(account_id)
+    record = await storage.get_message(account_id, str(message_id)) or {}
+    outcome = _classify(raw_status)
+    record.update({"status": outcome, "raw_status": raw_status, "dlr": payload})
+    await storage.record_message(account_id, str(message_id), record)
+
+    written = await _report_to_board(account_id, record, outcome)
+    return {"status": "recorded", "board_updated": "yes" if written else "no"}
+
+
+async def _report_to_board(account_id: int, record: dict[str, Any], outcome: str) -> bool:
+    item_id = record.get("item_id")
+    board_id = record.get("board_id")
+    column_id = record.get("dlr_column_id")
+    if not (item_id and board_id and column_id):
+        return False
+
+    access_token = await storage.get_access_token(account_id)
+    if not access_token:
+        return False
+
+    label = {"delivered": "Livre", "failed": "Echec", "pending": "En cours"}[outcome]
+    try:
+        await MondayClient(access_token).set_status(board_id, item_id, str(column_id), label)
+    except MondayApiError as exc:
+        logger.warning("Report DLR impossible sur l'element %s : %s", item_id, exc)
+        return False
+    return True
 
 
 @router.get("/api/messages/{message_id}")

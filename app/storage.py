@@ -7,6 +7,7 @@ from app.config import get_settings
 
 _CREDENTIALS_PREFIX = "nimba_credentials"
 _MESSAGE_PREFIX = "nimba_message"
+_TOKEN_PREFIX = "monday_access_token"
 
 
 class _InMemoryBackend:
@@ -113,3 +114,27 @@ async def record_message(account_id: int, message_id: str, data: dict[str, Any])
 async def get_message(account_id: int, message_id: str) -> dict[str, Any] | None:
     value = await _run(_get_backend().get, f"{_MESSAGE_PREFIX}:{account_id}:{message_id}")
     return value if isinstance(value, dict) else None
+
+
+# --- Access token OAuth monday, un par compte ----------------------------
+
+
+async def save_access_token(account_id: int, token: str) -> None:
+    await _run(_get_backend().put, f"{_TOKEN_PREFIX}:{account_id}", {"access_token": token})
+
+
+async def get_access_token(account_id: int) -> str | None:
+    value = await _run(_get_backend().get, f"{_TOKEN_PREFIX}:{account_id}")
+    if isinstance(value, dict) and value.get("access_token"):
+        return str(value["access_token"])
+    return None
+
+
+async def purge_account(account_id: int) -> None:
+    """Efface tout ce qui appartient au compte. Appele a la desinstallation.
+
+    Exigence marketplace : ne rien conserver apres retrait de l'app.
+    """
+    backend = _get_backend()
+    await _run(backend.delete, f"{_CREDENTIALS_PREFIX}:{account_id}")
+    await _run(backend.delete, f"{_TOKEN_PREFIX}:{account_id}")

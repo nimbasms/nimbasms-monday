@@ -18,9 +18,11 @@ Construite pour : **app publique marketplace**, **infrastructure monday workflow
 | Types GraphQL | `Int!` / `[Int]` | `ID!` / `[ID!]` (obligatoire depuis l'API 2023-10) |
 | CORS | absent, la vue ne pouvait joindre le backend | origines `*.monday.com` / `*.monday.app` autorisees |
 | Liste des expediteurs | endpoint maison appele par le navigateur | Remote Options URL cote serveur + endpoint vue |
-| Rapports de livraison | echo du payload recu | statut persiste et relisible |
 | Erreurs d'action | 500 silencieux, rejoue 30 min par monday | severity codes, echec permanent vs temporaire |
-| Tests | aucun | 21 tests |
+| Rapports de livraison | echo du payload recu | statut persiste, puis reporte sur l'element via OAuth |
+| Desinstallation | aucune purge | webhook de cycle de vie, effacement des donnees du compte |
+| En-tetes de securite | absents | HSTS, nosniff, referrer-policy |
+| Tests | aucun | 27 tests |
 
 ---
 
@@ -148,27 +150,57 @@ n'existe que dans le conteneur deploye.
 
 ## Limites connues
 
-1. **Retour de statut sur le board.** `/nimba/dlr` enregistre le statut mais
-   n'ecrit pas sur l'element. A ce moment-la le `shortLivedToken` de la requete
-   d'origine a expire (quelques minutes). Ecrire en differe demande un access
-   token OAuth obtenu a l'installation et conserve en secure storage — c'est le
-   dernier morceau a construire si le client veut voir « Livre » / « Echoue »
-   remonter automatiquement.
-2. **Severity codes.** Les valeurs de `app/errors.py` doivent etre confrontees a
+1. **Retour de statut sur le board.** Implemente. `/nimba/dlr` classe le
+   statut puis ecrit « Livre » / « Echec » / « En cours » sur l'element, a
+   condition que le compte ait autorise l'app en OAuth et que le bloc ait
+   renseigne `dlrColumnId`. Sans autorisation OAuth, le statut reste consultable
+   via `/api/messages/{id}` mais n'est pas reporte sur le board.
+2. **Flux OAuth 2.1.** L'implementation suit le flux historique. monday publie
+   un guide de migration vers OAuth 2.1 — a verifier avant soumission.
+3. **Severity codes.** Les valeurs de `app/errors.py` doivent etre confrontees a
    la grille officielle avant soumission.
-3. **Payload Nimba.** Les chemins et le format d'envoi (`to`, `message`,
+5. **Payload Nimba.** Les chemins et le format d'envoi (`to`, `message`,
    `sender_name`) sont repris de la version precedente du depot. A confirmer
    contre la documentation Nimba en vigueur, notamment le nom du champ de
    callback pour les DLR.
-4. **Envoi manuel limite a 500 destinataires** par requete. Au-dela il faut
+6. **Envoi manuel limite a 500 destinataires** par requete. Au-dela il faut
    passer par la file de monday code (`QueueApi`) pour ne pas depasser le
    timeout d'une minute.
 
 ## Avant soumission au marketplace
 
-- [ ] Politique de confidentialite et CGU publiees
-- [ ] Page de listing (captures, description, support)
+### Bloquant
+
+- [ ] **Relire et s'approprier le code.** monday refuse les apps « construites
+      principalement avec du no-code ou du code genere par IA ». Ce depot a ete
+      ecrit avec un assistant : la revue attend un auteur capable de defendre
+      chaque choix d'architecture.
+- [ ] **Arbitrer le stockage des identifiants Nimba.** L'app les collecte via
+      une vue d'administration. monday recommande la *Credentials field* pour
+      les workflows, et sa politique securite indique que l'app « ne doit pas
+      collecter d'identifiants utilisateur ». Point a confirmer avec l'equipe de
+      revue avant de figer l'architecture.
+- [ ] **Verifier la non-redondance.** monday n'approuve plus les integrations
+      dont l'objet principal duplique une integration existante. Nimba SMS est
+      un fournisseur distinct, mais l'argumentaire doit etre explicite.
+
+### Technique
+
+- [ ] Secret du sessionToken confirme, code reduit a ce seul secret
+- [ ] Grille des severity codes confrontee a la documentation
+- [ ] Format d'envoi Nimba et champ de callback DLR confirmes
 - [ ] Scopes OAuth reduits au strict necessaire
-- [ ] Rapport de scan de securite : `mapps code:report`
-- [ ] Verification du secret utilise pour le sessionToken (voir plus haut)
-- [ ] Test du bloc sur un board reel, recette activee puis desactivee
+- [ ] Scan de securite : `mapps code:report`, plus le scan Burp de la revue
+- [ ] Test sur board reel : recette activee, desactivee, app desinstallee
+
+### Legal et listing
+
+- [ ] Politique de confidentialite publiee en HTTPS (obligatoire)
+- [ ] Conditions d'utilisation
+- [ ] Canal de support actif, SLA du Marketplace Listing Agreement accepte
+- [ ] Page de listing : nom, description courte et longue, captures
+- [ ] App publiee via l'onglet *Share* pour obtenir le lien `auth.monday.com`
+      exige par le formulaire de soumission
+
+La revue se deroule sur un board monday partage : monday cree le board et t'y
+invite apres soumission.

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     # Secrets de l'app monday
     monday_signing_secret: str = ""
     monday_client_secret: str = ""
+    monday_client_id: str = ""
+    oauth_redirect_uri: str = ""
     app_public_url: str = ""
 
     # API monday

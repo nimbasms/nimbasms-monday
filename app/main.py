@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import credentials, health, messages, send, workflows
+from app.routers import credentials, health, lifecycle, messages, oauth, send, workflows
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
@@ -30,8 +30,21 @@ app.add_middleware(
     max_age=3600,
 )
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """En-tetes exiges par la revue securite du marketplace."""
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
 app.include_router(health.router)
 app.include_router(workflows.router)
 app.include_router(credentials.router)
 app.include_router(send.router)
 app.include_router(messages.router)
+app.include_router(oauth.router)
+app.include_router(lifecycle.router)

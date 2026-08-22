@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nimba SMS — connexion du compte</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/monday-sdk-js/dist/main.js"></script>
+    <script src="./config.js"></script>
+    <script src="./api.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <h1>Connecter Nimba SMS</h1>
+      <p class="lede">
+        Saisissez les identifiants API de votre compte Nimba SMS. Ils sont
+        conserves chiffres cote serveur et ne transitent plus jamais par le
+        navigateur ensuite.
+      </p>
+
+      <section id="connected" class="notice hidden">
+        <h2>Compte connecte</h2>
+        <p id="connectedDetail">Les envois de SMS sont actifs sur ce compte.</p>
+      </section>
+
+      <div id="form">
+        <label class="field">
+          <span>Service ID</span>
+          <input id="sidInput" type="text" autocomplete="off" spellcheck="false" />
+          <span class="help">
+            Disponible dans votre tableau de bord Nimba SMS, section API.
+          </span>
+        </label>
+
+        <label class="field">
+          <span>Secret token</span>
+          <input id="secretInput" type="password" autocomplete="off" />
+        </label>
+
+        <label class="field">
+          <span>Expediteur par defaut</span>
+          <input id="senderInput" type="text" autocomplete="off" placeholder="Facultatif" />
+          <span class="help">
+            Utilise quand une automatisation ne precise pas d'expediteur.
+          </span>
+        </label>
+
+        <div class="actions">
+          <button id="saveButton" type="button">Connecter le compte</button>
+          <button id="disconnectButton" class="danger hidden" type="button">
+            Deconnecter
+          </button>
+        </div>
+      </div>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </main>
+
+    <script>
+      (function () {
+        var api = window.NimbaApi;
+        var sidInput = document.getElementById("sidInput");
+        var secretInput = document.getElementById("secretInput");
+        var senderInput = document.getElementById("senderInput");
+        var saveButton = document.getElementById("saveButton");
+        var disconnectButton = document.getElementById("disconnectButton");
+        var statusLine = document.getElementById("status");
+        var connected = document.getElementById("connected");
+        var connectedDetail = document.getElementById("connectedDetail");
+
+        function setStatus(text, tone) {
+          statusLine.textContent = text || "";
+          statusLine.dataset.tone = tone || "info";
+        }
+
+        function renderState(state) {
+          if (state && state.configured) {
+            connected.classList.remove("hidden");
+            disconnectButton.classList.remove("hidden");
+            saveButton.textContent = "Mettre a jour les identifiants";
+            var names = state.sender_names || [];
+            connectedDetail.textContent = names.length
+              ? "Expediteurs disponibles : " + names.join(", ") + "."
+              : "Aucun expediteur valide n'est encore declare sur ce compte Nimba SMS.";
+            if (state.default_sender) senderInput.value = state.default_sender;
+          } else {
+            connected.classList.add("hidden");
+            disconnectButton.classList.add("hidden");
+            saveButton.textContent = "Connecter le compte";
+          }
+        }
+
+        saveButton.addEventListener("click", async function () {
+          var sid = sidInput.value.trim();
+          var secret = secretInput.value.trim();
+          if (!sid || !secret) {
+            return setStatus("Renseignez le Service ID et le secret token.", "error");
+          }
+
+          saveButton.disabled = true;
+          setStatus("Verification des identifiants aupres de Nimba SMS…", "info");
+          try {
+            var state = await api.put("/api/credentials", {
+              sid: sid,
+              secret: secret,
+              default_sender: senderInput.value.trim() || null,
+            });
+            secretInput.value = "";
+            renderState(state);
+            setStatus("Compte connecte.", "success");
+          } catch (error) {
+            setStatus(error.message, "error");
+          } finally {
+            saveButton.disabled = false;
+          }
+        });
+
+        disconnectButton.addEventListener("click", async function () {
+          disconnectButton.disabled = true;
+          try {
+            await api.del("/api/credentials");
+            sidInput.value = "";
+            secretInput.value = "";
+            senderInput.value = "";
+            renderState({ configured: false });
+            setStatus("Compte deconnecte. Les automatisations SMS sont suspendues.", "info");
+          } catch (error) {
+            setStatus(error.message, "error");
+          } finally {
+            disconnectButton.disabled = false;
+          }
+        });
+
+        api.get("/api/credentials").then(renderState).catch(function (error) {
+          setStatus(error.message, "error");
+        });
+      })();
+    </script>
+  </body>
+</html>

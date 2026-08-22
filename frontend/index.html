@@ -1,46 +1,68 @@
 <!doctype html>
 <html lang="fr">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nimba SMS pour monday</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nimba SMS</title>
     <link rel="stylesheet" href="./style.css" />
     <script src="https://cdn.jsdelivr.net/npm/monday-sdk-js/dist/main.js"></script>
+    <script src="./config.js"></script>
+    <script src="./sms.js"></script>
+    <script src="./api.js"></script>
   </head>
   <body>
-    <div class="container">
-      <h1>Nimba SMS</h1>
-      <p class="hint">
-        Utilisez cette vue pour envoyer un SMS manuellement ou via les colonnes
-        du board.
+    <main class="shell">
+      <h1>Envoyer un SMS</h1>
+      <p class="lede">
+        Les numeros des elements selectionnes sont repris automatiquement. Vous
+        pouvez en ajouter ou en retirer avant l'envoi.
       </p>
 
-      <label>
-        Message
-        <textarea id="messageInput" rows="4"></textarea>
-      </label>
+      <section id="setupNotice" class="notice hidden">
+        <h2>Connectez d'abord votre compte Nimba SMS</h2>
+        <p>
+          Un administrateur doit saisir les identifiants Nimba dans
+          Admin &rsaquo; Apps &rsaquo; Nimba SMS. L'envoi sera disponible ensuite.
+        </p>
+      </section>
 
-      <label>
-        Nom d'expediteur
-        <select id="senderSelect">
-          <option value="">Sélectionner un expéditeur</option>
-        </select>
-      </label>
+      <div id="composer">
+        <label class="field">
+          <span>Message</span>
+          <textarea id="messageInput" placeholder="Bonjour, votre commande est prete."></textarea>
+          <div class="meter" id="meter" data-encoding="gsm7">
+            <span><strong id="meterUnits">0</strong> caracteres</span>
+            <span><strong id="meterSegments">0</strong> segment(s)</span>
+            <span id="meterEncoding">Alphabet standard</span>
+          </div>
+        </label>
 
-      <label>
-        Numéros (un par ligne)
-        <textarea
-          id="phoneInput"
-          rows="4"
-          placeholder="+2246..."
-        ></textarea>
-        <span class="hint">Un numéro par ligne.</span>
-      </label>
+        <label class="field">
+          <span>Expediteur</span>
+          <select id="senderSelect">
+            <option value="">Chargement des expediteurs…</option>
+          </select>
+          <span class="help">
+            Seuls les expediteurs valides sur votre compte Nimba apparaissent ici.
+          </span>
+        </label>
 
-      <button id="sendButton">Envoyer le SMS</button>
-      <p id="status" class="status"></p>
-    </div>
+        <label class="field">
+          <span>Destinataires</span>
+          <textarea id="phoneInput" placeholder="+224 622 00 00 00"></textarea>
+          <span class="help" id="recipientHelp">Un numero par ligne.</span>
+        </label>
 
+        <div class="actions">
+          <button id="sendButton" type="button">Envoyer le SMS</button>
+          <button id="reloadButton" class="secondary" type="button">
+            Reprendre la selection du board
+          </button>
+        </div>
+      </div>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </main>
     <script src="./app.js"></script>
   </body>
 </html>

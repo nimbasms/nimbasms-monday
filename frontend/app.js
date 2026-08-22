@@ -1,163 +1,170 @@
-const monday = window.mondaySdk();
+(function () {
+  var api = window.NimbaApi;
+  var monday = api.monday;
 
-const phoneInput = document.getElementById("phoneInput");
-const messageInput = document.getElementById("messageInput");
-const senderSelect = document.getElementById("senderSelect");
-const sendButton = document.getElementById("sendButton");
-const statusLabel = document.getElementById("status");
+  var messageInput = document.getElementById("messageInput");
+  var phoneInput = document.getElementById("phoneInput");
+  var senderSelect = document.getElementById("senderSelect");
+  var sendButton = document.getElementById("sendButton");
+  var reloadButton = document.getElementById("reloadButton");
+  var statusLine = document.getElementById("status");
+  var recipientHelp = document.getElementById("recipientHelp");
+  var setupNotice = document.getElementById("setupNotice");
+  var composer = document.getElementById("composer");
+  var meter = document.getElementById("meter");
+  var meterUnits = document.getElementById("meterUnits");
+  var meterSegments = document.getElementById("meterSegments");
+  var meterEncoding = document.getElementById("meterEncoding");
 
-let context = {};
-let settings = {
-  backendUrl: "",
-  phoneColumnId: "",
-  messageColumnId: "",
-  senderId: "",
-  statusColumnId: "",
-  statusLabel: "SMS envoyé",
-  nimbaSid: "",
-  nimbaSecret: "",
-};
+  var context = {};
+  var settings = { phoneColumnId: "" };
 
-monday.listen("context", (res) => {
-  context = res.data || {};
-});
+  function setStatus(text, tone) {
+    statusLine.textContent = text || "";
+    statusLine.dataset.tone = tone || "info";
+  }
 
-monday.listen("settings", (res) => {
-  settings = { ...settings, ...(res.data || {}) };
-  loadSenders();
-});
+  function updateMeter() {
+    var reading = window.NimbaSms.measure(messageInput.value);
+    meterUnits.textContent = reading.units;
+    meterSegments.textContent = reading.segments;
+    meter.dataset.encoding = reading.encoding;
+    meterEncoding.textContent =
+      reading.encoding === "ucs2"
+        ? "Caracteres speciaux : 70 par segment"
+        : "Alphabet standard : 160 par segment";
+  }
 
-const showStatus = (message, type = "info") => {
-  statusLabel.textContent = message;
-  statusLabel.dataset.type = type;
-};
+  function currentRecipients() {
+    return phoneInput.value
+      .split(/[\n,;]+/)
+      .map(function (value) { return value.trim(); })
+      .filter(function (value) { return value.length > 0; });
+  }
 
-const fetchItemData = async () => {
-  if (!context.itemId) return {};
-  const query = `query ($itemId: [Int]) {
-    items(ids: $itemId) {
-      id
-      name
-      column_values { id text }
+  function updateRecipientCount() {
+    var count = currentRecipients().length;
+    recipientHelp.textContent =
+      count === 0
+        ? "Un numero par ligne."
+        : count + " destinataire(s) — un numero par ligne.";
+  }
+
+  function selectedItemIds() {
+    var ids = context.selectedItemsIds || context.selectedItemIds || context.selectedItems || [];
+    if (context.itemId && !ids.length) ids = [context.itemId];
+    return ids.map(String);
+  }
+
+  async function loadSelection() {
+    var ids = selectedItemIds();
+    if (!ids.length || !settings.phoneColumnId) {
+      updateRecipientCount();
+      return;
     }
-  }`;
-  const result = await monday.api(query, { variables: { itemId: [context.itemId] } });
-  const item = result?.data?.items?.[0];
-  return item || {};
-};
 
-const resolveColumnValue = (columns, columnId) => {
-  if (!columnId) return "";
-  const column = columns.find((entry) => entry.id === columnId);
-  return column?.text || "";
-};
+    // `[ID!]` et non `[Int]` : depuis l'API 2023-10 les identifiants sont des ID.
+    var query =
+      "query ($itemIds: [ID!]) { items(ids: $itemIds) { id column_values { id text } } }";
 
-const buildPayload = async () => {
-  const item = await fetchItemData();
-  const columns = item.column_values || [];
+    try {
+      var result = await monday.api(query, { variables: { itemIds: ids } });
+      var items = (result && result.data && result.data.items) || [];
+      var numbers = [];
+      items.forEach(function (item) {
+        (item.column_values || []).forEach(function (column) {
+          if (column.id !== settings.phoneColumnId || !column.text) return;
+          column.text.split(/[\n,;]+/).forEach(function (value) {
+            var trimmed = value.trim();
+            if (trimmed && numbers.indexOf(trimmed) === -1) numbers.push(trimmed);
+          });
+        });
+      });
+      phoneInput.value = numbers.join("\n");
+      updateRecipientCount();
+    } catch (error) {
+      setStatus("Lecture des elements impossible : " + error.message, "error");
+    }
+  }
 
-  const rawPhone =
-    phoneInput.value.trim() ||
-    resolveColumnValue(columns, settings.phoneColumnId);
-  const phone = rawPhone
-    .split(/\n+/)
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-  const message =
-    messageInput.value.trim() ||
-    resolveColumnValue(columns, settings.messageColumnId);
-  const senderId = senderSelect.value || settings.senderId;
+  function fillSenders(names, preferred) {
+    senderSelect.innerHTML = "";
+    if (!names.length) {
+      var empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "Aucun expediteur valide sur ce compte";
+      senderSelect.appendChild(empty);
+      return;
+    }
+    names.forEach(function (name) {
+      var option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      senderSelect.appendChild(option);
+    });
+    if (preferred && names.indexOf(preferred) !== -1) senderSelect.value = preferred;
+  }
 
-  return {
-    phone_number: phone,
-    message,
-    sender_id: senderId || undefined,
-    nimba_sid: settings.nimbaSid || undefined,
-    nimba_secret: settings.nimbaSecret || undefined,
-    board_id: context.boardId,
-    item_id: context.itemId,
-    status_column_id: settings.statusColumnId || undefined,
-    status_label: settings.statusLabel || undefined,
-  };
-};
+  async function loadAccountState() {
+    try {
+      var state = await api.get("/api/credentials");
+      if (!state.configured) {
+        setupNotice.classList.remove("hidden");
+        composer.classList.add("hidden");
+        return;
+      }
+      setupNotice.classList.add("hidden");
+      composer.classList.remove("hidden");
+      fillSenders(state.sender_names || [], state.default_sender);
+    } catch (error) {
+      setStatus(error.message, "error");
+    }
+  }
 
-const populateSenderOptions = (senders) => {
-  senderSelect.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "Sélectionner un sender";
-  senderSelect.appendChild(placeholder);
+  sendButton.addEventListener("click", async function () {
+    var message = messageInput.value.trim();
+    var recipients = currentRecipients();
 
-  senders.forEach((sender) => {
-    const option = document.createElement("option");
-    option.value = sender;
-    option.textContent = sender;
-    senderSelect.appendChild(option);
+    if (!message) return setStatus("Ecrivez le message avant d'envoyer.", "error");
+    if (!recipients.length) return setStatus("Ajoutez au moins un destinataire.", "error");
+
+    sendButton.disabled = true;
+    setStatus("Envoi en cours…", "info");
+
+    try {
+      var result = await api.post("/api/send", {
+        message: message,
+        recipients: recipients,
+        sender_name: senderSelect.value || null,
+        board_id: context.boardId ? String(context.boardId) : null,
+      });
+      var text = "SMS envoye a " + result.sent_count + " destinataire(s).";
+      if (result.rejected && result.rejected.length) {
+        text += " Numeros ignores : " + result.rejected.join(", ") + ".";
+      }
+      setStatus(text, "success");
+    } catch (error) {
+      setStatus(error.message, "error");
+    } finally {
+      sendButton.disabled = false;
+    }
   });
 
-  if (settings.senderId) {
-    senderSelect.value = settings.senderId;
-  }
-};
+  reloadButton.addEventListener("click", loadSelection);
+  messageInput.addEventListener("input", updateMeter);
+  phoneInput.addEventListener("input", updateRecipientCount);
 
-const loadSenders = async () => {
-  if (!settings.backendUrl) return;
-  try {
-    const response = await fetch(`${settings.backendUrl}/sendernames`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nimba_sid: settings.nimbaSid || undefined,
-        nimba_secret: settings.nimbaSecret || undefined,
-      }),
-    });
+  monday.listen("context", function (res) {
+    context = res.data || {};
+    loadSelection();
+  });
 
-    if (!response.ok) {
-      return;
-    }
-    const result = await response.json();
-    if (result.status === "ok") {
-      populateSenderOptions(result.senders || []);
-    }
-  } catch (error) {
-    showStatus(`Erreur senders: ${error.message}`, "error");
-  }
-};
+  monday.listen("settings", function (res) {
+    settings = Object.assign(settings, res.data || {});
+    loadSelection();
+  });
 
-sendButton.addEventListener("click", async () => {
-  try {
-    if (!settings.backendUrl) {
-      showStatus("Configurez l'URL du backend dans les settings.", "error");
-      return;
-    }
-
-    const payload = await buildPayload();
-    if (!payload.phone_number || !payload.message) {
-      showStatus("Numéro ou message manquant.", "error");
-      return;
-    }
-
-    showStatus("Envoi en cours...", "info");
-
-    const response = await fetch(`${settings.backendUrl}/monday/action`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ payload }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      showStatus(`Erreur: ${text}`, "error");
-      return;
-    }
-
-    const result = await response.json();
-    if (result.status === "sent") {
-      showStatus("SMS envoyé.", "success");
-    } else {
-      showStatus(`Statut: ${result.status}`, "error");
-    }
-  } catch (error) {
-    showStatus(`Erreur: ${error.message}`, "error");
-  }
-});
+  updateMeter();
+  updateRecipientCount();
+  loadAccountState();
+})();
